@@ -1,0 +1,129 @@
+import tkinter as tk
+from tkinter import messagebox
+from PIL import Image, ImageTk
+import requests, geocoder
+from datetime import datetime
+
+def kelvin_to_celsius(k): return round(k - 273.15, 1)
+
+def toggle_theme():
+    global dark_mode
+    dark_mode = not dark_mode
+    bg = "#1e1e1e" if dark_mode else "#87CEEB"
+    fg = "white" if dark_mode else "black"
+    canvas.config(bg=bg)
+    for widget in canvas.winfo_children():
+        try: widget.config(bg=bg, fg=fg)
+        except: pass
+
+def detect_location():
+    g = geocoder.ip('me')
+    city_entry.delete(0, tk.END)
+    city_entry.insert(0, g.city)
+
+def get_weather():
+    city = city_entry.get()
+    if not city:
+        messagebox.showwarning("Missing City", "Enter a city name.")
+        return
+
+    url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid=9dfeda4fc2128766cf9e272cf460c153"
+    try:
+        data = requests.get(url).json()
+        if data.get("cod") != "200":
+            messagebox.showerror("Error", data.get("message", "Failed to fetch data"))
+            return
+
+        current = data['list'][0]
+        temp = kelvin_to_celsius(current['main']['temp'])
+        desc = current['weather'][0]['description'].capitalize()
+        wind = current['wind']['speed']
+        humidity = current['main']['humidity']
+        pressure = current['main']['pressure']
+        sunrise = datetime.fromtimestamp(data['city']['sunrise']).strftime('%I:%M %p')
+        sunset = datetime.fromtimestamp(data['city']['sunset']).strftime('%I:%M %p')
+
+        weather_label.config(text=f"{desc}")
+        temp_label.config(text=f"🌡️ {temp}°C")
+        wind_label.config(text=f"💨 {wind} m/s")
+        humidity_label.config(text=f"💧 {humidity}%")
+        pressure_label.config(text=f"🔽 {pressure} hPa")
+        sunrise_label.config(text=f"🌅 {sunrise}")
+        sunset_label.config(text=f"🌇 {sunset}")
+
+        for widget in forecast_frame.winfo_children(): widget.destroy()
+        for i in range(6):
+            entry = data['list'][i]
+            time = entry['dt_txt'].split(" ")[1][:5]
+            temp = kelvin_to_celsius(entry['main']['temp'])
+            icon = entry['weather'][0]['main']
+            emoji = {"Clear":"☀️","Clouds":"☁️","Rain":"🌧️","Snow":"❄️","Thunderstorm":"⛈️"}.get(icon,"🌈")
+            lbl = tk.Label(forecast_frame, text=f"{time} {emoji} {temp}°C", font=("Arial", 10), bg=canvas["bg"], fg="white" if dark_mode else "black")
+            lbl.pack(side="left", padx=5)
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+def reset():
+    city_entry.delete(0, tk.END)
+    for lbl in [weather_label, temp_label, wind_label, humidity_label, pressure_label, sunrise_label, sunset_label]:
+        lbl.config(text="")
+    for widget in forecast_frame.winfo_children(): widget.destroy()
+
+def animate_clouds():
+    global cloud_x
+    cloud_x = (cloud_x + 1) % 800
+    canvas.coords(cloud_img_id, cloud_x, 50)
+    root.after(50, animate_clouds)
+
+# GUI setup
+root = tk.Tk()
+root.title("Animated Weather App")
+root.geometry("800x600")
+dark_mode = False
+
+canvas = tk.Canvas(root, width=800, height=600, bg="#87CEEB")
+canvas.pack(fill="both", expand=True)
+
+# Simulated animated cloud
+cloud_img = Image.open("cloud.png").resize((150, 80))
+cloud_photo = ImageTk.PhotoImage(cloud_img)
+cloud_x = 0
+cloud_img_id = canvas.create_image(cloud_x, 50, image=cloud_photo, anchor="nw")
+animate_clouds()
+
+# Search bar
+city_entry = tk.Entry(root, font=("Arial", 14), width=30)
+canvas.create_window(250, 30, window=city_entry)
+tk.Button(root, text="🔍", command=get_weather).place(x=500, y=25)
+tk.Button(root, text="📍", command=detect_location).place(x=550, y=25)
+tk.Button(root, text="🌙", command=toggle_theme).place(x=600, y=25)
+
+# Labels
+weather_label = tk.Label(root, font=("Arial", 16), bg="#87CEEB")
+canvas.create_window(400, 100, window=weather_label)
+
+temp_label = tk.Label(root, font=("Arial", 14), bg="#87CEEB")
+canvas.create_window(400, 140, window=temp_label)
+
+wind_label = tk.Label(root, font=("Arial", 14), bg="#87CEEB")
+canvas.create_window(400, 180, window=wind_label)
+
+humidity_label = tk.Label(root, font=("Arial", 14), bg="#87CEEB")
+canvas.create_window(400, 220, window=humidity_label)
+
+pressure_label = tk.Label(root, font=("Arial", 14), bg="#87CEEB")
+canvas.create_window(400, 260, window=pressure_label)
+
+sunrise_label = tk.Label(root, font=("Arial", 14), bg="#87CEEB")
+canvas.create_window(300, 300, window=sunrise_label)
+
+sunset_label = tk.Label(root, font=("Arial", 14), bg="#87CEEB")
+canvas.create_window(500, 300, window=sunset_label)
+
+forecast_frame = tk.Frame(root, bg="#87CEEB")
+canvas.create_window(400, 360, window=forecast_frame)
+
+tk.Button(root, text="Reset", command=reset, bg="orange").place(x=650, y=550)
+tk.Button(root, text="Exit", command=root.quit, bg="red").place(x=720, y=550)
+
+root.mainloop()
